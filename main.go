@@ -144,6 +144,22 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if r.Method == http.MethodHead {
+		obj_attrs, err := client.Bucket(attrs.Bucket).Object(attrs.Name).Attrs(r.Context())
+		if err != nil {
+			handleError(w, err)
+			return
+		}
+		setTimeHeader(w, "Last-Modified", attrs.Updated)
+		setStrHeader(w, "Content-Type", attrs.ContentType)
+		setStrHeader(w, "Content-Language", attrs.ContentLanguage)
+		setStrHeader(w, "Cache-Control", attrs.CacheControl)
+		setStrHeader(w, "Content-Encoding", obj_attrs.ContentEncoding)
+		setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
+		setIntHeader(w, "Content-Length", obj_attrs.Size)
+		return
+	}
+
 	gzipAcceptable := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
 	if strings.Contains(r.Header.Get("Range"), "bytes") {
 		log.Printf("Range header detected: %s", r.Header.Get("Range"))
@@ -157,7 +173,6 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 
 			has_start_byte := !strings.HasPrefix(item, "-")
 			has_end_byte := !strings.HasSuffix(item, "-")
-			log.Printf("Has bytes first:%v, second:%v", has_start_byte, has_end_byte)
 
 			byte_range := strings.Split(item, "-")
 			if has_start_byte && has_end_byte {
