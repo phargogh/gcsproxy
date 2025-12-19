@@ -6,6 +6,7 @@ import (
 	"flag"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -144,19 +145,88 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	gzipAcceptable := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
-	objr, err := client.Bucket(attrs.Bucket).Object(attrs.Name).ReadCompressed(gzipAcceptable).NewReader(r.Context())
-	if err != nil {
-		handleError(w, err)
-		return
+	if strings.Contains(r.Header.Get("Range"), "bytes") {
+		log.Printf("Range header detected: %s", r.Header.Get("Range"))
+		// process the range options
+		// Example range header value: bytes=0-50, 100-150, 9500-
+		// TODO: "last N bytes": bytes=-42
+		range_string := strings.TrimPrefix(r.Header.Get("Range"), "bytes=")
+		for _, item := range strings.Split(range_string, ",") {
+			start_byte := int64(0)
+			end_byte := int64(math.MaxInt64)
+
+			has_start_byte := !strings.HasPrefix(item, "-")
+			has_end_byte := !strings.HasSuffix(item, "-")
+			log.Printf("Has bytes first:%v, second:%v", has_start_byte, has_end_byte)
+
+			byte_range := strings.Split(item, "-")
+			if has_start_byte && has_end_byte {
+				first_byte, first_err := strconv.ParseInt(byte_range[0], 10, 64)
+				if first_err != nil {
+					log.Printf("Could not convert first byte to int %s", byte_range[0])
+				}
+				second_byte, second_err := strconv.ParseInt(byte_range[1], 10, 64)
+				if second_err != nil {
+					log.Printf("Could not convert second byte to int %s", byte_range[0])
+				}
+				start_byte = first_byte
+				end_byte = second_byte
+			} else {
+				known_byte, err := strconv.ParseInt(byte_range[0], 10, 64)
+				if err != nil {
+					log.Printf("Coult not convert byte to int %s", byte_range[0])
+				}
+				if has_start_byte { // implied: !has_end_byte
+					start_byte = known_byte
+				} else if has_end_byte {
+					end_byte = known_byte
+				} else {
+					log.Printf("This should be impossible")
+				}
+			}
+
+			log.Printf("Requesting range %v-%v", start_byte, end_byte)
+			objr, err := client.Bucket(attrs.Bucket).Object(attrs.Name).ReadCompressed(gzipAcceptable).NewRangeReader(r.Context(), start_byte, end_byte)
+			if err != nil {
+				handleError(w, err)
+				return
+			}
+			w.WriteHeader(http.StatusPartialContent)  // indicate 206 partial content
+			setTimeHeader(w, "Last-Modified", attrs.Updated)
+			setStrHeader(w, "Content-Type", attrs.ContentType)
+			setStrHeader(w, "Content-Language", attrs.ContentLanguage)
+			setStrHeader(w, "Cache-Control", attrs.CacheControl)
+			setStrHeader(w, "Content-Encoding", objr.Attrs.ContentEncoding)
+			setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
+
+			// convert start and end bytes to their absolute byte indices
+			content_length := objr.Attrs.Size
+			if start_byte < 0 {
+				start_byte = content_length - start_byte
+			}
+			if end_byte < 0 {
+				end_byte = content_length - end_byte
+			}
+			content_length = end_byte - start_byte
+			log.Printf("Content length: %v", content_length)
+			setIntHeader(w, "Content-Length", content_length)
+			io.Copy(w, objr)
+		}
+	} else {
+		objr, err := client.Bucket(attrs.Bucket).Object(attrs.Name).ReadCompressed(gzipAcceptable).NewReader(r.Context())
+		if err != nil {
+			handleError(w, err)
+			return
+		}
+		setTimeHeader(w, "Last-Modified", attrs.Updated)
+		setStrHeader(w, "Content-Type", attrs.ContentType)
+		setStrHeader(w, "Content-Language", attrs.ContentLanguage)
+		setStrHeader(w, "Cache-Control", attrs.CacheControl)
+		setStrHeader(w, "Content-Encoding", objr.Attrs.ContentEncoding)
+		setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
+		setIntHeader(w, "Content-Length", objr.Attrs.Size)
+		io.Copy(w, objr)
 	}
-	setTimeHeader(w, "Last-Modified", attrs.Updated)
-	setStrHeader(w, "Content-Type", attrs.ContentType)
-	setStrHeader(w, "Content-Language", attrs.ContentLanguage)
-	setStrHeader(w, "Cache-Control", attrs.CacheControl)
-	setStrHeader(w, "Content-Encoding", objr.Attrs.ContentEncoding)
-	setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
-	setIntHeader(w, "Content-Length", objr.Attrs.Size)
-	io.Copy(w, objr)
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
