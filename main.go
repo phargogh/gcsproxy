@@ -144,12 +144,12 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	obj_attrs, err := client.Bucket(attrs.Bucket).Object(attrs.Name).Attrs(r.Context())
+	if err != nil {
+		handleError(w, err)
+		return
+	}
 	if r.Method == http.MethodHead {
-		obj_attrs, err := client.Bucket(attrs.Bucket).Object(attrs.Name).Attrs(r.Context())
-		if err != nil {
-			handleError(w, err)
-			return
-		}
 		setTimeHeader(w, "Last-Modified", attrs.Updated)
 		setStrHeader(w, "Content-Type", attrs.ContentType)
 		setStrHeader(w, "Content-Language", attrs.ContentLanguage)
@@ -169,7 +169,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 		range_string := strings.TrimPrefix(r.Header.Get("Range"), "bytes=")
 		for _, item := range strings.Split(range_string, ",") {
 			start_byte := int64(0)
-			end_byte := int64(math.MaxInt64)
+			end_byte := int64(obj_attrs.Size)
 
 			has_start_byte := !strings.HasPrefix(item, "-")
 			has_end_byte := !strings.HasSuffix(item, "-")
@@ -201,7 +201,8 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 			}
 
 			log.Printf("Requesting range %v-%v", start_byte, end_byte)
-			objr, err := client.Bucket(attrs.Bucket).Object(attrs.Name).ReadCompressed(gzipAcceptable).NewRangeReader(r.Context(), start_byte, end_byte)
+			length := end_byte - start_byte
+			objr, err := client.Bucket(attrs.Bucket).Object(attrs.Name).ReadCompressed(gzipAcceptable).NewRangeReader(r.Context(), start_byte, length)
 			if err != nil {
 				handleError(w, err)
 				return
@@ -214,17 +215,8 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 			setStrHeader(w, "Content-Encoding", objr.Attrs.ContentEncoding)
 			setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
 
-			// convert start and end bytes to their absolute byte indices
-			content_length := objr.Attrs.Size
-			if start_byte < 0 {
-				start_byte = content_length - start_byte
-			}
-			if end_byte < 0 {
-				end_byte = content_length - end_byte
-			}
-			content_length = end_byte - start_byte
-			log.Printf("Content length: %v", content_length)
-			setIntHeader(w, "Content-Length", content_length)
+			log.Printf("Content length: %v", length)
+			setIntHeader(w, "Content-Length", length)
 			io.Copy(w, objr)
 		}
 	} else {
