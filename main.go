@@ -6,7 +6,6 @@ import (
 	"flag"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"net/url"
 	"strconv"
