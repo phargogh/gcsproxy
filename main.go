@@ -197,8 +197,9 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			end_byte = min(end_byte, int64(attrs.Size))
 			log.Printf("Requesting range %v-%v", start_byte, end_byte)
-			length := end_byte - start_byte
+			length := end_byte - start_byte + 1  // range is inclusive w/r/t length
 			objr, err := client.Bucket(attrs.Bucket).Object(attrs.Name).ReadCompressed(gzipAcceptable).NewRangeReader(r.Context(), start_byte, length)
 			if err != nil {
 				handleError(w, err)
@@ -212,7 +213,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 			setStrHeader(w, "Content-Encoding", objr.Attrs.ContentEncoding)
 			setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
 			setStrHeader(w, "Accept-Ranges", "bytes")
-			setStrHeader(w, "Server", "UploadServer")
+			setStrHeader(w, "Server", "UploadServer")  // Google specific
 
 			log.Printf("Content length: %v", length)
 			setIntHeader(w, "Content-Length", length)
