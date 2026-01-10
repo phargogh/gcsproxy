@@ -144,19 +144,14 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	obj_attrs, err := client.Bucket(attrs.Bucket).Object(attrs.Name).Attrs(r.Context())
-	if err != nil {
-		handleError(w, err)
-		return
-	}
 	if r.Method == http.MethodHead {
 		setTimeHeader(w, "Last-Modified", attrs.Updated)
 		setStrHeader(w, "Content-Type", attrs.ContentType)
 		setStrHeader(w, "Content-Language", attrs.ContentLanguage)
 		setStrHeader(w, "Cache-Control", attrs.CacheControl)
-		setStrHeader(w, "Content-Encoding", obj_attrs.ContentEncoding)
+		setStrHeader(w, "Content-Encoding", attrs.ContentEncoding)
 		setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
-		setIntHeader(w, "Content-Length", obj_attrs.Size)
+		setIntHeader(w, "Content-Length", attrs.Size)
 		setStrHeader(w, "Accept-Ranges", "bytes")
 		setStrHeader(w, "Server", "UploadServer")
 		return
@@ -171,7 +166,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 		range_string := strings.TrimPrefix(r.Header.Get("Range"), "bytes=")
 		for _, item := range strings.Split(range_string, ",") {
 			start_byte := int64(0)
-			end_byte := int64(obj_attrs.Size)
+			end_byte := int64(attrs.Size)
 
 			has_start_byte := !strings.HasPrefix(item, "-")
 			has_end_byte := !strings.HasSuffix(item, "-")
