@@ -28,7 +28,8 @@ var client *storage.Client
 
 func handleError(w http.ResponseWriter, err error) {
 	if errors.Is(err, storage.ErrObjectNotExist) {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		// http.StatusForbidden is HTTP 403 Forbidden, which GCS typically returns instead of 404
+		http.Error(w, err.Error(), http.StatusForbidden)
 	} else {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
