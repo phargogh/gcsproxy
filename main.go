@@ -156,6 +156,8 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 		setStrHeader(w, "Content-Encoding", obj_attrs.ContentEncoding)
 		setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
 		setIntHeader(w, "Content-Length", obj_attrs.Size)
+		setStrHeader(w, "Accept-Ranges", "bytes")
+		setStrHeader(w, "Server", "UploadServer")
 		return
 	}
 
@@ -213,6 +215,8 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 			setStrHeader(w, "Cache-Control", attrs.CacheControl)
 			setStrHeader(w, "Content-Encoding", objr.Attrs.ContentEncoding)
 			setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
+			setStrHeader(w, "Accept-Ranges", "bytes")
+			setStrHeader(w, "Server", "UploadServer")
 
 			log.Printf("Content length: %v", length)
 			setIntHeader(w, "Content-Length", length)
@@ -231,6 +235,8 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 		setStrHeader(w, "Content-Encoding", objr.Attrs.ContentEncoding)
 		setStrHeader(w, "Content-Disposition", attrs.ContentDisposition)
 		setIntHeader(w, "Content-Length", objr.Attrs.Size)
+		setStrHeader(w, "Accept-Ranges", "bytes")
+		setStrHeader(w, "Server", "UploadServer")
 		io.Copy(w, objr)
 	}
 }
