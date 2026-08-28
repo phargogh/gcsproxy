@@ -128,7 +128,15 @@ func fetchObjectAttrs(ctx context.Context, bucket, object string) (*storage.Obje
 func proxy(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 
-	attrs, err := fetchObjectAttrs(r.Context(), params["bucket"], params["object"])
+  // handle case where an index.html exists and a "directory" was requested.
+  var object string
+  if strings.HasSuffix(params["object"], "/") {
+          object = params["object"] + "index.html"
+  } else {
+          object = params["object"]
+  }
+
+  attrs, err := fetchObjectAttrs(r.Context(), params["bucket"], object)
 	if err != nil {
 		handleError(w, err)
 		return
